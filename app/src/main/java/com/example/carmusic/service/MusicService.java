@@ -10,6 +10,8 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
+
 import androidx.core.app.NotificationCompat;
 import com.example.carmusic.bean.MusicBean;
 import java.util.ArrayList;
@@ -90,6 +92,12 @@ public class MusicService extends Service {
     }
 
     public void playNext() {
+        // 加入防衛語句：如果播放列表是空的或為 null，直接返回，不做任何事
+        if (playlist == null || playlist.isEmpty()) {
+            return;
+        }
+
+        // 列表確認有內容後，再執行計算
         play((currentPosition + 1) % playlist.size());
     }
 
@@ -142,5 +150,11 @@ public class MusicService extends Service {
                 .setOngoing(true) // 设置为常驻通知
                 .build();
         startForeground(1, notification);
+    }
+    private void loadMusic() {
+        // ... 读取音乐的代码 ...
+
+        // 在读取结束后打印一下数量
+        Log.d("MusicService", "加载完成，共找到歌曲数量: " + playlist.size());
     }
 }
