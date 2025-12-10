@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#121212">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_list"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.4"
+        android:padding="8dp"
+        android:background="#1A1A1A"/>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.6"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="选择音乐"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/tv_sub_artist"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="--"
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tv_title" />
+
+        <LinearLayout
+            android:id="@+id/layout_buttons"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <Button
+                android:id="@+id/btn_prev"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="上一曲" />
+
+            <Button
+                android:id="@+id/btn_play"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:text="播放" />
+
+            <Button
+                android:id="@+id/btn_next"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="下一曲" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/seek_bar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:maxHeight="4dp"
+            android:progressDrawable="@android:drawable/progress_horizontal"
+            android:thumb="@android:drawable/ic_media_play"
+            app:layout_constraintBottom_toTopOf="@+id/layout_buttons"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cv_vinyl_container"
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            app:cardBackgroundColor="#2A2A2A"
+            app:cardCornerRadius="80dp"
+            app:cardElevation="8dp"
+            app:layout_constraintBottom_toTopOf="@+id/seek_bar"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tv_sub_artist">
+
+            <ImageView
+                android:id="@+id/iv_album_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_gallery" />
+
+        </androidx.cardview.widget.CardView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_gravity="center"
+        app:cardBackgroundColor="#121212"
+        app:cardCornerRadius="9dp"
+        app:cardElevation="0dp" />
+</LinearLayout>
