@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
@@ -15,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MusicService extends Service {
-    private MediaPlayer mediaPlayer = new MediaPlayer();
+    private MediaPlayer mediaPlayer; // 建议不要直接 new，放在 onCreate 初始化
     private List<MusicBean> playlist = new ArrayList<>();
     private int currentPosition = -1;
     private final IBinder binder = new MusicBinder();
@@ -31,6 +32,7 @@ public class MusicService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        mediaPlayer = new MediaPlayer(); // 在这里初始化更安全
         createNotificationChannel();
         mediaPlayer.setOnCompletionListener(mp -> playNext());
     }
@@ -39,40 +41,40 @@ public class MusicService extends Service {
         this.playlist = list;
     }
 
+    // ✅ 核心修改：统一使用 Uri 加载，解决 setDataSource 崩溃
     public void play(int pos) {
         if (playlist.isEmpty() || pos < 0 || pos >= playlist.size()) return;
         currentPosition = pos;
 
         try {
-            mediaPlayer.reset(); // 重置播放器状态
+            mediaPlayer.reset();
 
             String path = playlist.get(pos).getPath();
+            Uri contentUri = Uri.parse(path); // 将字符串转回 Uri
 
-            // 【关键修复】区分加载方式
-            if (path.startsWith("android.resource://")) {
-                // 如果是 Raw 内置资源，必须用 Context + Uri 方式加载
-                mediaPlayer.setDataSource(getApplicationContext(), android.net.Uri.parse(path));
-            } else {
-                // 如果是手机本地文件，直接用路径加载
-                mediaPlayer.setDataSource(path);
-            }
+            // 无论是 android.resource 还是 content://，都用这个方法加载
+            mediaPlayer.setDataSource(getApplicationContext(), contentUri);
 
-            // 先设置监听器
             mediaPlayer.setOnPreparedListener(mp -> {
-                mp.start(); // 【关键】准备好后立即播放
+                mp.start();
                 showNotification(playlist.get(pos));
                 if (onStateChange != null) onStateChange.run();
             });
 
-            // 再开始异步准备
+            // 增加错误监听，防止坏文件导致闪退
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                // 这里可以自动切下一首，或者停止
+                return true; // 返回 true 表示由于错误已被处理，不会崩溃
+            });
+
             mediaPlayer.prepareAsync();
 
         } catch (Exception e) {
             e.printStackTrace();
-            // 如果出错，打印日志
         }
     }
 
+    // --- 以下代码保持不变 ---
     public void pause() {
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
@@ -97,7 +99,6 @@ public class MusicService extends Service {
         play(pos);
     }
 
-    // --- 新增功能：进度控制 ---
     public int getCurrentProgress() {
         if (mediaPlayer != null && (mediaPlayer.isPlaying() || currentPosition != -1)) {
             return mediaPlayer.getCurrentPosition();
@@ -117,12 +118,13 @@ public class MusicService extends Service {
             mediaPlayer.seekTo(progress);
         }
     }
-    // -----------------------
 
-    public boolean isPlaying() { return mediaPlayer.isPlaying(); }
+    public boolean isPlaying() { return mediaPlayer != null && mediaPlayer.isPlaying(); }
+
     public MusicBean getCurrentMusic() {
-        return (currentPosition != -1) ? playlist.get(currentPosition) : null;
+        return (currentPosition != -1 && currentPosition < playlist.size()) ? playlist.get(currentPosition) : null;
     }
+
     public void setOnStateChange(Runnable action) { this.onStateChange = action; }
 
     private void createNotificationChannel() {
@@ -137,6 +139,7 @@ public class MusicService extends Service {
                 .setContentTitle(music.getTitle())
                 .setContentText(music.getArtist())
                 .setSmallIcon(android.R.drawable.ic_media_play)
+                .setOngoing(true) // 设置为常驻通知
                 .build();
         startForeground(1, notification);
     }
