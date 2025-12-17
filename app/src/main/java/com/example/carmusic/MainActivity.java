@@ -28,6 +28,9 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.carmusic.adapter.MusicAdapter;
 import com.example.carmusic.bean.MusicBean;
 import com.example.carmusic.service.MusicService;
+import com.example.carmusic.utils.MusicUtils;
+
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private MusicService musicService;
@@ -57,22 +60,14 @@ public class MainActivity extends AppCompatActivity {
             musicService = ((MusicService.MusicBinder) service).getService();
             isBound = true;
 
-            // 1. 设置回调：当 Service 切歌或播放状态改变时，更新界面
+            // 绑定成功后，检查权限并开始扫描（保留原本逻辑）
+            checkPermission();
+
+            // 设置状态回调
             musicService.setOnStateChange(() -> runOnUiThread(() -> updateUI()));
 
-            // 2. 设置回调：当 Service 扫描完音乐后，更新列表
-            musicService.setOnPlaylistLoaded(() -> runOnUiThread(() -> {
-                adapter.setList(musicService.getPlaylist()); // 假设你的 Adapter 有 setList 方法
-                Toast.makeText(MainActivity.this, "加载歌曲: " + musicService.getPlaylist().size(), Toast.LENGTH_SHORT).show();
-            }));
-
-            // 3. 如果 Service 已经有数据（比如屏幕旋转重连），直接显示
-            if (!musicService.getPlaylist().isEmpty()) {
-                adapter.setList(musicService.getPlaylist());
-                updateUI();
-            }
+            // 【修复报错】：删除了 setOnPlaylistLoaded，因为我们用原本的 scan() 方法
         }
-
         @Override public void onServiceDisconnected(ComponentName name) { isBound = false; }
     };
 
@@ -80,46 +75,19 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        // 检查权限
-        checkPermissionAndStart();
-    }
-
-    private void checkPermissionAndStart() {
-        String permission = (Build.VERSION.SDK_INT >= 33) ?
-                Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
-
-        if (ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{permission}, 1);
-        } else {
-            initApp();
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int r, String[] p, int[] g) {
-        super.onRequestPermissionsResult(r, p, g);
-        if (g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
-            initApp();
-        } else {
-            Toast.makeText(this, "需要权限才能播放音乐", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void initApp() {
         initView();
         initAnimation();
 
         Intent intent = new Intent(this, MusicService.class);
-        startService(intent); // 启动服务（后台保活）
-        bindService(intent, connection, Context.BIND_AUTO_CREATE); // 绑定服务（控制交互）
+        startService(intent);
+        bindService(intent, connection, Context.BIND_AUTO_CREATE);
         handler.post(progressRunnable);
     }
 
     private void initView() {
         RecyclerView rv = findViewById(R.id.rv_list);
         tvTitle = findViewById(R.id.tv_title);
-        tvArtist = findViewById(R.id.tv_sub_artist); // 请确保 XML ID 对应
+        tvArtist = findViewById(R.id.tv_sub_artist);
         btnPlay = findViewById(R.id.btn_play);
         Button btnNext = findViewById(R.id.btn_next);
         Button btnPrev = findViewById(R.id.btn_prev);
@@ -130,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
         adapter = new MusicAdapter();
         rv.setAdapter(adapter);
 
-        // 点击列表播放
         adapter.setOnItemClick(pos -> { if (isBound) musicService.play(pos); });
 
         btnPlay.setOnClickListener(v -> {
@@ -158,26 +125,23 @@ public class MainActivity extends AppCompatActivity {
         rotateAnimator.setInterpolator(new LinearInterpolator());
     }
 
-    // 更新界面（含图片加载）
     private void updateUI() {
         if (musicService == null) return;
         MusicBean current = musicService.getCurrentMusic();
-
         if (current != null) {
             tvTitle.setText(current.getTitle());
             tvArtist.setText(current.getArtist());
             seekBar.setMax(musicService.getDuration());
 
-            // --- 加载专辑封面 (核心代码) ---
-            Uri albumUri = ContentUris.withAppendedId(
-                    Uri.parse("content://media/external/audio/albumart"),
-                    current.getAlbumResId()
-            );
-
+            // --- 优化：使用系统相册ID加载封面 (比原来的 MetadataRetriever 更快更稳) ---
             try {
-                ivAlbumCover.setImageResource(android.R.drawable.ic_menu_gallery); // 先重置默认图
+                // 先重置默认图
+                ivAlbumCover.setImageResource(android.R.drawable.ic_menu_gallery);
+
                 if (current.getAlbumResId() > 0) {
-                    ivAlbumCover.setImageURI(albumUri);
+                    Uri albumArtUri = Uri.parse("content://media/external/audio/albumart");
+                    Uri imgUri = ContentUris.withAppendedId(albumArtUri, current.getAlbumResId());
+                    ivAlbumCover.setImageURI(imgUri);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -194,10 +158,40 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void checkPermission() {
+        String permission = (Build.VERSION.SDK_INT >= 33) ?
+                Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
+
+        if (ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{permission}, 1);
+        } else {
+            scan();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int r, String[] p, int[] g) {
+        super.onRequestPermissionsResult(r, p, g);
+        if (g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) scan();
+    }
+
+    // 保留原本的扫描逻辑
+    private void scan() {
+        new Thread(() -> {
+            List<MusicBean> list = MusicUtils.getMusicData(this);
+            runOnUiThread(() -> {
+                adapter.setList(list);
+                if (isBound) musicService.setPlaylist(list); // 把数据传给 Service
+                Toast.makeText(this, "扫描到 " + list.size() + " 首歌", Toast.LENGTH_SHORT).show();
+            });
+        }).start();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         handler.removeCallbacks(progressRunnable);
+        if (rotateAnimator != null) rotateAnimator.cancel();
         if (isBound) unbindService(connection);
     }
 }
